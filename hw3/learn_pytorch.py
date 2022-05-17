@@ -24,8 +24,7 @@ test_dataloader = DataLoader(test_data, batch_size=64)
 
 
 def train_loop(dataloader, model, loss_fn, optimizer):
-    print (dataloader)
-    exit(1)
+
     size = len(dataloader.dataset)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
