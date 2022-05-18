@@ -6,6 +6,7 @@ from sklearn_pandas import DataFrameMapper
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, precision_score, confusion_matrix
 import numpy as np
+from sklearn.svm import SVC
 
 import torch
 import torch.nn as nn
@@ -86,7 +87,6 @@ def pre_process_data():
         (['fin_bal'], sklearn.preprocessing.StandardScaler()),
         (['sa_crd_bal'], sklearn.preprocessing.StandardScaler()),
         (['acct_bal'], sklearn.preprocessing.StandardScaler()),
-
     ])
 
     X = np.round (train_mapper.fit_transform(res.copy()), 2)
@@ -167,32 +167,40 @@ if __name__ == "__main__":
 
     train_x, train_y, test_x, test_y = pre_process_data()
 
-    clf = DecisionTreeClassifier()
+    #clf = DecisionTreeClassifier()
+    #clf = SVC()
 
-    clf.fit(train_x, train_y)
-    pred = clf.predict(test_x)
-    print(confusion_matrix(test_y, pred))
+    #clf.fit(train_x, train_y)
+    #pred = clf.predict(test_x)
+    #print(confusion_matrix(test_y, pred))
+    #print(accuracy_score(test_y, pred))
     
-    #train_data = MyDataset(train_x, train_y)
-    #test_data = MyDataset(test_x, test_y)
-#
-    #train_data_loader = DataLoader (
-    #    train_data, batch_size=64
-    #)
-    #test_data_loader = DataLoader (
-    #    test_data, batch_size=64
-    #)
-#
-    #model = MyNetwork()
-    #loss_fn = nn.CrossEntropyLoss()
-    #learning_rate = 1e-3
-    #optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-#
-    #epochs = 10
-    #for t in range(epochs):
-    #    print(f"Epoch {t+1}\n-------------------------------")
-    #    train_loop(train_data_loader, model, loss_fn, optimizer)
-    #    test_loop(test_data_loader, model, loss_fn)
-    #print("Done!")
+    train_data = MyDataset(train_x, train_y)
+    test_data = MyDataset(test_x, test_y)
+
+    train_data_loader = DataLoader (
+        train_data, batch_size=64
+    )
+    test_data_loader = DataLoader (
+        test_data, batch_size=64
+    )
+
+    model = MyNetwork()
+    loss_fn = nn.CrossEntropyLoss()
+    learning_rate = 1e-3
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    epochs = 10
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+        train_loop(train_data_loader, model, loss_fn, optimizer)
+        test_loop(test_data_loader, model, loss_fn)
+    print("Done!")
+
+    pred = model(test_x)
+    pred = pred.argmax(dim=1)
+    print(type(pred))
+    print(confusion_matrix(test_y, pred))
+    print(accuracy_score(test_y, pred))
 
   
