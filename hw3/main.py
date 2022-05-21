@@ -16,8 +16,11 @@ from torch.utils.data import DataLoader
 
 from mydata import MyDataset
 
+from matplotlib import pyplot as plt
+from sklearn.metrics import plot_confusion_matrix
 
-def pre_process_data():
+
+def pre_process_data_star():
     pri_star_table = pandas.read_csv (
         "/mnt/2022spr/data-integrate/data/pri_star_info_202205141729.csv"
     )
@@ -51,20 +54,6 @@ def pre_process_data():
         ]
     )
 
-#    pri_cust_base = pandas.read_csv (
-#        "/mnt/2022spr/data-integrate/data/pri_cust_base_info_202205141729.csv",
-#        usecols=[
-#            'uid',
-#            'marrige',
-#            'education',
-#            'career',
-#            'prof_titl',
-#            'is_employee',
-#            'is_shareholder',
-#            'is_black'
-#        ]
-#    )
-
     # merge 1
     res = pandas.merge(pri_star_table, cust_asset, how='left', on='uid')
     res = res[(res['star_level']!=-1)]
@@ -73,10 +62,6 @@ def pre_process_data():
     # merge 2
     res = pandas.merge(res, cust_asset_acct, how="left", on="uid")
     res = res[(res['subject_no'].notnull())]
-
-#    # merge 3
-#    res = pandas.merge(res, pri_cust_base, how='left', on='uid')
-#    res = res[(res['marrige'].notnull())]
 
     train_mapper = DataFrameMapper ([
         (['all_bal'], sklearn.preprocessing.StandardScaler()),
@@ -113,15 +98,116 @@ def pre_process_data():
     return tensor_X_train, tensor_Y_train, tensor_X_test, tensor_Y_test
 
 
+
+
+
+
+
+
+
+
+
+def pre_process_data_credit():
+    pri_cust_liab = pandas.read_csv(
+        "/mnt/2022spr/data-integrate/data/pri_cust_liab_info_202205141729.csv",
+        usecols=[
+            'uid',
+            'all_bal',
+            'bad_bal',
+            'due_intr',
+            'norm_bal',
+            'delay_bal',
+        ]
+    )
+
+    pri_credit_info = pandas.read_csv(
+        "/mnt/2022spr/data-integrate/data/pri_credit_info_202205141729.csv"
+    )
+
+    pri_credit_info['credit_level'] = pri_credit_info['credit_level'].map(
+        lambda x : 
+        1 if x==35 else 
+            (2 if x==50 else (
+                3 if x==60 else (
+                    4 if x==70 else (
+                        5 if x==85 else -1
+                    )
+                )
+            ))
+    )
+
+    res = pandas.merge(pri_credit_info, pri_cust_liab, how='left', on='uid')
+    res = res[(res['all_bal'].notnull())]
+    res = res[(res['credit_level']!=-1)]
+
+    dm_v_as_djk = pandas.read_csv(
+        "/mnt/2022spr/data-integrate/data/dm_v_as_djk_info_202205141729.csv",
+        usecols=[
+            'uid',
+            'cred_limit',
+            'over_draft',
+            'dlay_amt'
+        ]
+    )
+
+    res = pandas.merge(res, dm_v_as_djk, how='left', on='uid')
+    res = res[(res['cred_limit'].notnull())]
+
+    # 不使用下面这张表，因为连接后数据量将从接近20w下降至1w条，因此不使用
+    #dm_v_as_djkfq = pandas.read_csv (
+    #    "/mnt/2022spr/data-integrate/data/dm_v_as_djkfq_info_202205141729.csv",
+    #    usecols=[
+    #        'uid',
+    #        'total_amt'
+    #    ]
+    #)
+    #res = pandas.merge(res ,dm_v_as_djkfq, how='left', on='uid')
+    #res = res[(res['total_amt'].notnull())]
+
+    train_mapper = DataFrameMapper ([
+        (['all_bal'], sklearn.preprocessing.StandardScaler()),
+        (['bad_bal'], sklearn.preprocessing.StandardScaler()),
+        (['due_intr'], sklearn.preprocessing.StandardScaler()),
+        (['norm_bal'], sklearn.preprocessing.StandardScaler()),
+        (['delay_bal'], sklearn.preprocessing.StandardScaler()),
+        (['cred_limit'], sklearn.preprocessing.StandardScaler()),
+        (['over_draft'], sklearn.preprocessing.StandardScaler()),
+        (['dlay_amt'], sklearn.preprocessing.StandardScaler())
+    ])
+
+    X = np.round(train_mapper.fit_transform(res.copy()), 2)
+
+    labels_mapper = DataFrameMapper([
+        (['credit_level'], None)
+    ])
+   
+    Y = np.round (labels_mapper.fit_transform(res.copy()))
+
+    X_train, X_test, Y_train, Y_test = train_test_split (
+        X, Y, test_size=0.2
+    )   
+    
+    Y_train = column_or_1d(Y_train)
+    Y_test = column_or_1d(Y_test)
+
+    tensor_X_train = torch.from_numpy(X_train).float()
+    tensor_Y_train = torch.from_numpy(Y_train)
+
+    tensor_X_test = torch.from_numpy(X_test).float()
+    tensor_Y_test = torch.from_numpy(Y_test)
+
+    return tensor_X_train, tensor_Y_train, tensor_X_test, tensor_Y_test
+
+
 class MyNetwork(nn.Module):
     def __init__(self) :
         super(MyNetwork, self).__init__()
 
         #self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential (
-            nn.Linear(8, 20),
+            nn.Linear(8, 4),
             nn.SELU(),
-            nn.Linear(20, 10),
+            nn.Linear(4, 6),
             nn.SELU(),
         )
     def forward(self, x):
@@ -163,17 +249,48 @@ def test_loop(dataloader, model, loss_fn):
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-if __name__ == "__main__":
+def star_train():
 
-    train_x, train_y, test_x, test_y = pre_process_data()
+    train_x, train_y, test_x, test_y = pre_process_data_star()
+    
+    train_data = MyDataset(train_x, train_y)
+    test_data = MyDataset(test_x, test_y)
 
-    #clf = DecisionTreeClassifier()
-    #clf = SVC()
+    clf = DecisionTreeClassifier()
+    clf.fit(train_x, train_y)
 
-    #clf.fit(train_x, train_y)
-    #pred = clf.predict(test_x)
-    #print(confusion_matrix(test_y, pred))
-    #print(accuracy_score(test_y, pred))
+    train_data_loader = DataLoader (
+        train_data, batch_size=64
+    )
+    test_data_loader = DataLoader (
+        test_data, batch_size=64
+    )
+
+    model = MyNetwork()
+    loss_fn = nn.CrossEntropyLoss()
+    learning_rate = 1e-3
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    epochs = 10
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+        train_loop(train_data_loader, model, loss_fn, optimizer)
+        test_loop(test_data_loader, model, loss_fn)
+    print("Done!")
+
+    pred = model(test_x)
+    pred = pred.argmax(dim=1)
+    print(type(pred))
+    cm = confusion_matrix(test_y, pred)
+    plt.matshow(cm)
+    for (x, y), value in np.ndenumerate(cm):
+        plt.text(x, y, value, va="center", ha="center")
+    plt.show()
+    print(accuracy_score(test_y, pred))
+
+
+def credit_train():
+    train_x, train_y, test_x, test_y = pre_process_data_credit()
     
     train_data = MyDataset(train_x, train_y)
     test_data = MyDataset(test_x, test_y)
@@ -200,7 +317,24 @@ if __name__ == "__main__":
     pred = model(test_x)
     pred = pred.argmax(dim=1)
     print(type(pred))
-    print(confusion_matrix(test_y, pred))
+    cm = confusion_matrix(test_y, pred)
+    plt.matshow(cm)
+
+    for (x, y), value in np.ndenumerate(cm):
+        plt.text(x, y, value, va="center", ha="center")
+    plt.show()
     print(accuracy_score(test_y, pred))
 
-  
+    #clf = DecisionTreeClassifier()
+    #clf.fit(train_x, train_y)
+    #pred = clf.predict(test_x)
+    #
+    #plot_confusion_matrix(clf, test_x, test_y)
+#
+    #plt.show()
+    #print(accuracy_score(test_y, pred))
+
+
+
+if __name__ == "__main__":
+    star_train()
