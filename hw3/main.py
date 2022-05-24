@@ -18,7 +18,7 @@ from mydata import MyDataset
 
 from matplotlib import pyplot as plt
 from sklearn.metrics import plot_confusion_matrix
-
+from joblib import dump, load
 
 def pre_process_data_star():
     pri_star_table = pandas.read_csv (
@@ -266,6 +266,12 @@ def star_train():
         test_data, batch_size=64
     )
 
+    clf = load("../model/star_decision_tree.joblib")
+
+    clf.fit(train_x, train_y)
+    print(clf.score(test_x, test_y))
+    exit(1)
+
     model = MyNetwork()
     loss_fn = nn.CrossEntropyLoss()
     learning_rate = 1e-3
@@ -302,6 +308,13 @@ def credit_train():
         test_data, batch_size=64
     )
 
+    clf = DecisionTreeClassifier()
+
+    clf.fit(train_x, train_y)
+    print(clf.score(test_x, test_y))
+    dump(clf, "../model/credit_decision_tree.joblib")
+    exit(1)
+
     model = MyNetwork()
     loss_fn = nn.CrossEntropyLoss()
     learning_rate = 1e-3
@@ -337,4 +350,4 @@ def credit_train():
 
 
 if __name__ == "__main__":
-    star_train()
+    credit_train()
